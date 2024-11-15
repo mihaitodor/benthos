@@ -262,7 +262,7 @@ func IGetBytes(v any) ([]byte, error) {
 }
 
 // IGetTimestamp takes a boxed value and attempts to coerce it into a timestamp,
-// either by interpretting a numerical value as a unix timestamp, or by parsing
+// either by interpreting a numerical value as a unix timestamp, or by parsing
 // a string value as RFC3339Nano.
 func IGetTimestamp(v any) (time.Time, error) {
 	if tVal, ok := v.(time.Time); ok {
@@ -521,6 +521,35 @@ func IToFloat32(v any) (float32, error) {
 		return float32(f64), nil
 	}
 	return 0, NewTypeError(v, TNumber)
+}
+
+// IToTimestamp takes a boxed value and attempts to extract a timestamp from it
+// by interpreting a numerical value as a unix timestamp.
+func IToTimestamp(v any) (time.Time, error) {
+	if tVal, ok := v.(time.Time); ok {
+		return tVal, nil
+	}
+	switch t := ISanitize(v).(type) {
+	case int64:
+		return time.Unix(t, 0), nil
+	case uint64:
+		return time.Unix(int64(t), 0), nil
+	case float64:
+		fint := math.Trunc(t)
+		fdec := t - fint
+		return time.Unix(int64(fint), int64(fdec*1e9)), nil
+	case json.Number:
+		if i, err := t.Int64(); err == nil {
+			return time.Unix(i, 0), nil
+		} else if f, err := t.Float64(); err == nil {
+			fint := math.Trunc(f)
+			fdec := f - fint
+			return time.Unix(int64(fint), int64(fdec*1e9)), nil
+		} else {
+			return time.Time{}, fmt.Errorf("failed to parse value '%v' as number", v)
+		}
+	}
+	return time.Time{}, NewTypeError(v, TNumber)
 }
 
 const (
